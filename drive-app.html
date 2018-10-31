@@ -2,10 +2,169 @@
   <style></style>
   <template>
 
-    I'm a shiny new element.
+    <google-signin client-id="" scopes="https://www.googleapis.com/auth/drive" >
+    </google-signin>
+    <google-signin-aware scopes="https://www.googleapis.com/auth/drive" on-google-signin-aware-success="signedIn" on-google-signin-aware-signed-out="signedOut">
+    </google-signin-aware>
+
+    <div id="loggedin">
+      <div id="dropzone" on-tap="tapSelect" on-dragover="handleDragOver" on-drop="handleFileSelect">
+        Drag files to upload
+        <input type="file" id="files" name="files[]" on-change="handleFilePick" multiple="">
+      </div>
+
+      <paper-toolbar id="dropzone-bar">
+        <div class="flex">
+          <span>Auto-upload</span>
+          <paper-toggle-button oncaption="On" offcaption="Off" checked="{{autoUpload}}">
+          </paper-toggle-button>
+        </div>
+
+        <div class="flex">
+          <button id="upload" on-click="manualUpload" style$="{{computeStyle(autoUpload)}}">
+            Upload files
+          </button>
+        </div>
+
+        <div class="flex"></div>
+        <div>
+          <div id="status">Ready</div>
+        </div>
+      </paper-toolbar>
+
+      <div id="file-splitter" class="flex horizontal layout">
+        <div class="flex panel">
+          <paper-toolbar><div class="layout horizontal">Queue</div></paper-toolbar>
+          <ul class="filelist">
+            <template is="dom-repeat" items="{{uploadList}}" as="file">
+              <li>
+                <strong>{{file.name}}</strong> <span>{{file.type}}</span>
+              </li>
+            </template>
+          </ul>
+        </div>
+
+        <div class="flex panel">
+          <paper-toolbar><div class="layout horizontal">Uploaded</div></paper-toolbar>
+
+          <ul class="filelist">
+            <template is="dom-repeat" items="{{uploadedList}}" as="file">
+              <li>
+                <img src="{{file.iconLink}}">
+                <strong>{{file.title}}</strong>
+                <p>
+                  <a href$="{{file.selfLink}}">Drive URL</a>
+                  <a href$="{{file.webContentLink}}">Web URL</a>
+                </p>
+              </li>
+            </template>
+          </ul>
+        </div>
+      </div>
+    </div>
 
   </template>
   <script>
-    Polymer({ is: 'drive-app' });
+    Polymer({
+      is: 'drive-app',
+      properties: {
+        uploadList: {    // selected files
+          type: Array,
+          value: [],
+          notify: true
+        },
+        uploadedList: {  // successfully uploaded files
+          type: Array,
+          value: [],
+          notify: true
+        },
+        autoUpload: { // automatically upload?
+          type: Boolean,
+          value: false,
+          notify: true
+        }
+      },
+
+      manualUpload: function () {
+        this.uploadFiles(this.queue);
+      },
+
+      uploadFiles: function (files) {
+        var uploadedList = this.uploadedList;
+        this.$.status.innerHTML = 'Uploading...';
+
+        var f;
+        for(var i=0; f = files[i]; i++) {
+          var uploader = new MediaUploader({
+            file: f,
+            token: this.accessToken,
+            onComplete: function (data) {
+              this.push('uploadedList', JSON.parse(data));
+              this.$.status.innerHTML = 'Upload successful';
+              this.uploadList = [];
+            }.bind(this)
+          });
+          uploader.upload();
+        }
+      },
+      computeStyle: function(val) {
+        if (val) {
+          return 'display: none';
+        } else {
+          return 'display: block';
+        }
+      },
+
+      tapSelect: function (e) {
+        if (e.target.id !== 'files') {
+          this.$.files.click();
+        }
+      },
+
+      signedIn: function (e) {
+        this.accessToken = e.detail.access_token;
+        this.$.loggedin.style.display = 'block';
+      },
+
+      signedOut: function (e) {
+        this.$.loggedin.style.display = 'none';
+      },
+
+      handleDragOver: function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+      },
+
+      handleFilePick: function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        this.selectFiles(e.target.files);
+      },
+
+      handleFileSelect: function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        this.selectFiles(e.dataTransfer.files);
+      },
+
+      clearUploadList: function () {
+        this.uploadedList = [];
+        this.uploadList = [];
+      },
+
+      selectFiles: function (files) {
+        this.queue = files;
+        this.$.status.textContent = 'Files selected';
+        var f;
+        for(var i=0; f = files[i]; i++) {
+          this.push('uploadList', f);
+        }
+
+        if(this.autoUpload) {
+          this.uploadFiles(files);
+        }
+      }
+    });
   </script>
 </dom-module>
